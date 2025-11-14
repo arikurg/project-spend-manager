@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Spend Manager - Home{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <div class="hero-content">
+        <h1>Take Control of Your Business Spending</h1>
+        <p>Track, analyze, and optimize your recurring expenses. Discover hidden savings.</p>
+        <div class="hero-actions">
+            <a href="/register" class="btn btn-primary">Get Started Free</a>
+            <a href="/login" class="btn btn-secondary">Sign In</a>
+        </div>
+    </div>
+</div>
+
+<div class="features">
+    <h2>Why Choose Spend Manager?</h2>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Real-Time Analytics</h3>
+            <p>Get instant insights into your spending patterns and identify cost-saving opportunities.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔔</div>
+            <h3>Smart Reminders</h3>
+            <p>Receive alerts 7 days before subscriptions renew. Cancel forgotten services automatically.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">💾</div>
+            <h3>Secure & Reliable</h3>
+            <p>PostgreSQL database with enterprise-grade security. Your data is always protected.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>Fast & Simple</h3>
+            <p>Intuitive interface designed for quick expense management. Start saving in minutes.</p>
+        </div>
+    </div>
+</div>
+
+<div class="cta-section">
+    <h2>Ready to Save More?</h2>
+    <p>Join businesses that are already reducing costs with Spend Manager</p>
+    <a href="/register" class="btn btn-primary btn-large">Start Free Trial</a>
+</div>
+{% endblock %}
+

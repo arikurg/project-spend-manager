@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Spend Manager{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Dashboard</h1>
+    <a href="/expenses" class="btn btn-primary">+ Add Expense</a>
+</div>
+
+<div class="dashboard-grid">
+    <div class="stat-card">
+        <div class="stat-label">Monthly Spend</div>
+        <div class="stat-value" id="monthlySpend">$0.00</div>
+        <div class="stat-detail" id="subscriptionCount">0 subscriptions</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-label">Yearly Spend</div>
+        <div class="stat-value" id="yearlySpend">$0.00</div>
+        <div class="stat-detail">Projected annual cost</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-label">Highest Category</div>
+        <div class="stat-value" id="highestCategory">—</div>
+        <div class="stat-detail" id="highestAmount">$0.00</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-label">Next Renewal</div>
+        <div class="stat-value" id="nextRenewal">—</div>
+        <div class="stat-detail" id="nextAmount">—</div>
+    </div>
+</div>
+
+<div class="dashboard-section">
+    <h2>Upcoming Renewals (30 days)</h2>
+    <div id="upcomingRenewals" class="renewal-list">
+        <p class="empty-state">No upcoming renewals</p>
+    </div>
+</div>
+
+<div class="dashboard-section">
+    <h2>Spending by Category</h2>
+    <div id="categoryChart" class="category-chart">
+        <p class="empty-state">No data yet</p>
+    </div>
+</div>
+
+<div class="dashboard-section">
+    <h2>Your Expenses</h2>
+    <div id="expensesList" class="expenses-table">
+        <p class="empty-state">No expenses yet. <a href="/expenses">Add one now</a></p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadDashboard() {
+    try {
+        // Check if user is logged in
+        const meResponse = await fetch('/api/auth/me');
+        if (!meResponse.ok) {
+            window.location.href = '/login';
+            return;
+        }
+        
+        // Load stats
+        const statsResponse = await fetch('/api/dashboard/stats');
+        const stats = await statsResponse.json();
+        
+        // Load summary
+        const summaryResponse = await fetch('/api/dashboard/summary');
+        const summary = await summaryResponse.json();
+        
+        // Update stat cards
+        document.getElementById('monthlySpend').textContent = `$${summary.total_monthly_spend.toFixed(2)}`;
+        document.getElementById('yearlySpend').textContent = `$${summary.total_yearly_spend.toFixed(2)}`;
+        document.getElementById('subscriptionCount').textContent = `${summary.total_subscriptions} subscriptions`;
+        
+        if (summary.highest_spend_category) {
+            document.getElementById('highestCategory').textContent = summary.highest_spend_category;
+            const categoryTotal = Object.values(stats.category_spend).find((_, idx) => 
+                Object.keys(stats.category_spend)[idx] === summary.highest_spend_category
+            );
+            document.getElementById('highestAmount').textContent = `$${categoryTotal.toFixed(2)}`;
+        }
+        
+        // Upcoming renewals
+        if (stats.upcoming_renewals && stats.upcoming_renewals.length > 0) {
+            const nextRenewal = stats.upcoming_renewals[0];
+            document.getElementById('nextRenewal').textContent = new Date(nextRenewal.renewal_date).toLocaleDateString();
+            document.getElementById('nextAmount').textContent = `${nextRenewal.name} - $${nextRenewal.amount.toFixed(2)}`;
+            
+            let renewalHTML = '<div class="renewal-items">';
+            stats.upcoming_renewals.forEach(expense => {
+                const date = new Date(expense.renewal_date);
+                const daysUntil = Math.ceil((date - new Date()) / (1000 * 60 * 60 * 24));
+                renewalHTML += `
+                    <div class="renewal-item">
+                        <div class="renewal-info">
+                            <div class="renewal-name">${expense.name}</div>
+                            <div class="renewal-category">${expense.category}</div>
+                        </div>
+                        <div class="renewal-meta">
+                            <div class="renewal-date">${date.toLocaleDateString()}</div>
+                            <div class="renewal-amount">$${expense.amount.toFixed(2)}</div>
+                            <div class="renewal-days">${daysUntil} days</div>
+                        </div>
+                    </div>
+                `;
+            });
+            renewalHTML += '</div>';
+            document.getElementById('upcomingRenewals').innerHTML = renewalHTML;
+        }
+        
+        // Category chart
+        if (Object.keys(stats.category_spend).length > 0) {
+            let categoryHTML = '<div class="category-items">';
+            const total = Object.values(stats.category_spend).reduce((a, b) => a + b, 0);
+            
+            Object.entries(stats.category_spend).forEach(([category, amount]) => {
+                const percentage = (amount / total) * 100;
+                categoryHTML += `
+                    <div class="category-item">
+                        <div class="category-name">${category}</div>
+                        <div class="category-bar">
+                            <div class="category-bar-fill" style="width: ${percentage}%"></div>
+                        </div>
+                        <div class="category-amount">$${amount.toFixed(2)} (${percentage.toFixed(1)}%)</div>
+                    </div>
+                `;
+            });
+            categoryHTML += '</div>';
+            document.getElementById('categoryChart').innerHTML = categoryHTML;
+        }
+        
+        // Expenses list
+        if (stats.recently_added && stats.recently_added.length > 0) {
+            let expensesHTML = '<table class="expenses-table-element"><thead><tr><th>Service</th><th>Category</th><th>Amount</th><th>Renewal</th><th>Actions</th></tr></thead><tbody>';
+            stats.recently_added.forEach(expense => {
+                const date = new Date(expense.renewal_date);
+                expensesHTML += `
+                    <tr>
+                        <td>${expense.name}</td>
+                        <td><span class="badge">${expense.category}</span></td>
+                        <td>$${expense.amount.toFixed(2)}</td>
+                        <td>${date.toLocaleDateString()}</td>
+                        <td>
+                            <a href="/expenses?edit=${expense.id}" class="action-link">Edit</a>
+                            <a href="#" class="action-link delete" onclick="deleteExpense(${expense.id}, event)">Delete</a>
+                        </td>
+                    </tr>
+                `;
+            });
+            expensesHTML += '</tbody></table>';
+            document.getElementById('expensesList').innerHTML = expensesHTML;
+        }
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+    }
+}
+
+async function deleteExpense(id, event) {
+    event.preventDefault();
+    if (confirm('Are you sure you want to delete this expense?')) {
+        try {
+            const response = await fetch(`/api/expenses/${id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                loadDashboard();
+            } else {
+                alert('Failed to delete expense');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+}
+
+// Load dashboard on page load
+document.addEventListener('DOMContentLoaded', loadDashboard);
+</script>
+{% endblock %}
+

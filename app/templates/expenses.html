@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Expenses - Spend Manager{% endblock %}
+
+{% block content %}
+<div class="expenses-header">
+    <h1>Manage Expenses</h1>
+    <a href="/dashboard" class="btn btn-secondary">← Back to Dashboard</a>
+</div>
+
+<div class="expenses-container">
+    <div class="expense-form-section">
+        <h2>Add New Expense</h2>
+        <form id="expenseForm" onsubmit="handleAddExpense(event)">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="name">Service Name *</label>
+                    <input type="text" id="name" name="name" placeholder="e.g., Figma, Slack, GitHub Pro" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="category">Category *</label>
+                    <select id="category" name="category" required>
+                        <option value="">Select a category</option>
+                        <option value="Design">Design</option>
+                        <option value="Development">Development</option>
+                        <option value="Communication">Communication</option>
+                        <option value="Analytics">Analytics</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Productivity">Productivity</option>
+                        <option value="Security">Security</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="amount">Monthly Amount ($) *</label>
+                    <input type="number" id="amount" name="amount" placeholder="0.00" step="0.01" min="0" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="renewal_date">Renewal Date *</label>
+                    <input type="date" id="renewal_date" name="renewal_date" required>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Description (Optional)</label>
+                <textarea id="description" name="description" placeholder="Add notes about this subscription..." rows="3"></textarea>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block">Add Expense</button>
+        </form>
+    </div>
+    
+    <div class="expense-list-section">
+        <h2>Your Subscriptions</h2>
+        <div id="expensesList" class="expense-list">
+            <p class="empty-state">Loading your expenses...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadExpenses() {
+    try {
+        // Check if user is logged in
+        const meResponse = await fetch('/api/auth/me');
+        if (!meResponse.ok) {
+            window.location.href = '/login';
+            return;
+        }
+        
+        const response = await fetch('/api/expenses');
+        const data = await response.json();
+        
+        if (data.expenses && data.expenses.length > 0) {
+            let html = '<div class="expense-items">';
+            
+            data.expenses.sort((a, b) => new Date(a.renewal_date) - new Date(b.renewal_date)).forEach(expense => {
+                const date = new Date(expense.renewal_date);
+                const today = new Date();
+                const daysUntil = Math.ceil((date - today) / (1000 * 60 * 60 * 24));
+                const isUpcoming = daysUntil <= 7 && daysUntil > 0;
+                
+                html += `
+                    <div class="expense-item ${isUpcoming ? 'upcoming' : ''}">
+                        <div class="expense-info">
+                            <div class="expense-name">${expense.name}</div>
+                            <div class="expense-meta">
+                                <span class="badge">${expense.category}</span>
+                                <span class="renewal-info">Renews ${date.toLocaleDateString()}</span>
+                                ${isUpcoming ? '<span class="alert-badge">Renews in ' + daysUntil + ' days</span>' : ''}
+                            </div>
+                            ${expense.description ? '<div class="expense-description">' + expense.description + '</div>' : ''}
+                        </div>
+                        <div class="expense-actions">
+                            <div class="expense-amount">$${expense.amount.toFixed(2)}/mo</div>
+                            <button onclick="editExpense(${expense.id})" class="btn btn-small btn-secondary">Edit</button>
+                            <button onclick="deleteExpense(${expense.id})" class="btn btn-small btn-danger">Delete</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            document.getElementById('expensesList').innerHTML = html;
+        } else {
+            document.getElementById('expensesList').innerHTML = '<p class="empty-state">No expenses yet. Add one using the form above!</p>';
+        }
+    } catch (error) {
+        console.error('Error loading expenses:', error);
+        document.getElementById('expensesList').innerHTML = '<p class="empty-state error">Error loading expenses</p>';
+    }
+}
+
+async function handleAddExpense(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('name').value;
+    const category = document.getElementById('category').value;
+    const amount = document.getElementById('amount').value;
+    const renewal_date = document.getElementById('renewal_date').value;
+    const description = document.getElementById('description').value;
+    
+    try {
+        const response = await fetch('/api/expenses', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name,
+                category,
+                amount: parseFloat(amount),
+                renewal_date,
+                description
+            })
+        });
+        
+        if (response.ok) {
+            document.getElementById('expenseForm').reset();
+            loadExpenses();
+            alert('Expense added successfully! You will receive a reminder 7 days before renewal.');
+        } else {
+            const data = await response.json();
+            alert(data.error || 'Failed to add expense');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('An error occurred');
+    }
+}
+
+async function deleteExpense(id) {
+    if (confirm('Are you sure you want to delete this expense?')) {
+        try {
+            const response = await fetch(`/api/expenses/${id}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                loadExpenses();
+            } else {
+                alert('Failed to delete expense');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+}
+
+function editExpense(id) {
+    alert('Edit functionality coming soon!');
+}
+
+// Load expenses on page load
+document.addEventListener('DOMContentLoaded', loadExpenses);
+</script>
+{% endblock %}
+
